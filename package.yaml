@@ -35,6 +35,8 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - p2pchat
+    - network
+    - bytestring
 
 tests:
   p2pchat-test:
