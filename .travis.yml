@@ -1,0 +1,46 @@
+# Use new container infrastructure to enable caching
+sudo: false
+
+# Do not choose a language; we provide our own build tools.
+language: generic
+
+# Caching so the next build will be fast too.
+cache:
+  directories:
+  - $HOME/.stack
+
+before_install:
+# Download and unpack the stack executable
+- mkdir -p ~/.local/bin
+- export PATH=$HOME/.local/bin:$PATH
+- travis_retry curl -L https://get.haskellstack.org/stable/linux-x86_64.tar.gz \
+    | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
+
+# Ensure necessary system libraries are present
+addons:
+  apt:
+    packages:
+      - libgmp-dev
+
+install:
+# Build dependencies
+- stack --no-terminal --install-ghc test --only-dependencies
+
+script:
+# Build the package, its tests and run the tests
+- stack --no-terminal test --haddock --no-haddock-deps --coverage
+- mv `stack path --local-doc-root` docs/doc
+- stack bench --benchmark-arguments="-o docs/report.html"
+- mv `stack path --local-hpc-root` docs/hpc
+- travis_retry curl -sSL https://raw.github.com/ndmitchell/hlint/master/misc/travis.sh \
+    | sh -s .
+
+deploy:
+  provider: pages # speziell für GitHub Pages
+  skip_cleanup: true # der Branch soll **nicht ** vorher gelöscht werden
+  github_token: $GITHUB_TOKEN # das Token damit der Travis das darf,
+                              # soll nicht in den Logs stehen, daher Variable
+  on:
+    branch: master # auch wenn alle Branches gebaut werden, deployed werden
+                   # soll nur vom master
+  local_dir: docs # in den Branch soll nur die Haddock-Dokumentation
