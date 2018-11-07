@@ -37,6 +37,7 @@ executables:
     - p2pchat
     - network
     - bytestring
+    - optparse-applicative
 
 tests:
   p2pchat-test:
