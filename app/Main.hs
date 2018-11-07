@@ -9,7 +9,7 @@ import           Control.Monad                  ( unless
                                                 , forever
                                                 , void
                                                 )
-import           Control.Concurrent             ( forkFinally )
+import           Control.Concurrent             ( forkFinally, killThread, forkIO )
 
 import           Options.Applicative
 import           Data.Semigroup                 ( (<>) )
@@ -58,7 +58,7 @@ input =
 main :: IO ()
 main = withSocketsDo $ do
   hSetBuffering stdout NoBuffering
-  bla =<< execParser opts
+  main' =<< execParser opts
  where
   opts = info
     (input <**> helper)
@@ -67,43 +67,69 @@ main = withSocketsDo $ do
     )
 
 
-bla :: Input -> IO ()
-bla (Input Client port ip) = doClient ip port
-bla (Input Server port _ ) = doServer port
+main' :: Input -> IO ()
+main' (Input Client port ip) = doClient ip port
+main' (Input Server port _ ) = doServer port
 
 doClient :: String -> Int -> IO ()
 doClient ipAddr port = do
   putStrLn "Started Client..."
-  addr <- resolve ipAddr port
-  sock <- socket (addrFamily addr) (addrSocketType addr) (addrProtocol addr)
-  connect sock $ addrAddress addr
-  BS.send sock (B.pack "This is a test\n")
-  BS.send sock (B.pack "This is a test\n")
-  close sock
+  E.bracket (open ipAddr port) close loop
+  return()
  where
   resolve host port = do
     let hints = defaultHints { addrSocketType = Stream }
     addr : _ <- getAddrInfo (Just hints) (Just host) (Just (show port))
     return addr
+  open host port = do 
+    addr <- resolve host port
+    sock <- socket (addrFamily addr) (addrSocketType addr) (addrProtocol addr)
+    connect sock $ addrAddress addr
+    return sock
+  loop sock = do
+    msg <- getLine
+    case msg of 
+      "/quit" -> do 
+        putStrLn "Quitting..."
+      [] -> loop sock
+      x -> do 
+        BS.send sock (B.pack msg)
+        loop sock
+      
+    
+
 
 doServer :: Int -> IO ()
 doServer port = do
   putStrLn "Started Server..."
-  E.bracket (open port) close loop
+  id <- forkIO (E.bracket (open port) shutdown loop)
+  waitForQuit
  where
+  waitForQuit = do
+    putStrLn "Type '/quit' to close the server"
+    msg <- getLine
+    case msg of 
+      "/quit" -> do 
+        putStrLn "Quitting..."
+      [] -> waitForQuit    
   open port = do
     sock <- socket AF_INET Stream 0
     setSocketOption sock ReuseAddr 1
+    setSocketOption sock RecvTimeOut 10000
+    setSocketOption sock SendTimeOut 10000    
     bind sock (SockAddrInet (toEnum port) iNADDR_ANY)
     listen sock 2
     return sock
   loop sock = forever $ do
     (conn, peer) <- accept sock
     putStrLn $ "Connection from " ++ show peer
-    void $ forkFinally (talk conn) (\_ -> close conn)
+    void $ forkFinally (talk conn) (\_ -> shutdown conn)
   talk conn = do
     -- fork here to have a send "thread"
-    msg <- BS.recv conn 1024
+    msg <- BS.recv conn 256
     unless (B.length msg == 0) $ do
-      putStrLn $ B.unpack msg
+      putStrLn $ (show conn) ++ (B.unpack msg)
       talk conn
+  shutdown conn = do
+    putStrLn "Shutting Down!"
+    close conn
