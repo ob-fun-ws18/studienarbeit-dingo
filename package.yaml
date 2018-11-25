@@ -35,9 +35,11 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - p2pchat
+    - text
     - network
     - bytestring
     - optparse-applicative
+    - aeson
 
 tests:
   p2pchat-test:

@@ -9,7 +9,7 @@ import           Control.Monad                  ( unless
                                                 , forever
                                                 , void
                                                 )
-import           Control.Concurrent             ( forkFinally, killThread, forkIO )
+import           Control.Concurrent             ( forkFinally, killThread, forkIO, MVar, putMVar, threadDelay, newEmptyMVar, takeMVar)
 
 import           Options.Applicative
 import           Data.Semigroup                 ( (<>) )
@@ -87,7 +87,8 @@ doClient ipAddr port = do
     connect sock $ addrAddress addr
     return sock
   loop sock = do
-    msg <- getLine
+    let actions = [beat, getLine]
+    msg <- compete actions
     case msg of 
       "/quit" -> do 
         putStrLn "Quitting..."
@@ -96,8 +97,18 @@ doClient ipAddr port = do
         BS.send sock (B.pack msg)
         loop sock
       
-    
+beat :: IO (String)
+beat = do
+  threadDelay 2000000
+  return "Heatbeat"
 
+compete :: [IO a] -> IO a
+compete actions = do
+  mvar <- newEmptyMVar
+  tids <- mapM (\action -> forkIO $ action >>= putMVar mvar) actions
+  result <- takeMVar mvar
+  mapM_ killThread tids
+  return result
 
 doServer :: Int -> IO ()
 doServer port = do
