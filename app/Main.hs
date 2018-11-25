@@ -1,6 +1,7 @@
 module Main where
 
 import           System.IO
+import           System.Timeout
 import           Network.Socket
 import           Network.Socket.ByteString     as BS
 import qualified Data.ByteString.Char8         as B
@@ -9,7 +10,15 @@ import           Control.Monad                  ( unless
                                                 , forever
                                                 , void
                                                 )
-import           Control.Concurrent             ( forkFinally, killThread, forkIO, MVar, putMVar, threadDelay, newEmptyMVar, takeMVar)
+import           Control.Concurrent             ( forkFinally
+                                                , killThread
+                                                , forkIO
+                                                , MVar
+                                                , putMVar
+                                                , threadDelay
+                                                , newEmptyMVar
+                                                , takeMVar
+                                                )
 
 import           Options.Applicative
 import           Data.Semigroup                 ( (<>) )
@@ -75,40 +84,31 @@ doClient :: String -> Int -> IO ()
 doClient ipAddr port = do
   putStrLn "Started Client..."
   E.bracket (open ipAddr port) close loop
-  return()
+  return ()
  where
   resolve host port = do
     let hints = defaultHints { addrSocketType = Stream }
     addr : _ <- getAddrInfo (Just hints) (Just host) (Just (show port))
     return addr
-  open host port = do 
+  open host port = do
     addr <- resolve host port
     sock <- socket (addrFamily addr) (addrSocketType addr) (addrProtocol addr)
     connect sock $ addrAddress addr
     return sock
   loop sock = do
-    let actions = [beat, getLine]
-    msg <- compete actions
-    case msg of 
-      "/quit" -> do 
+    mmsg <- timeout 20000 getLine
+    case (unpackMaybe $ mmsg) of
+      "/quit" -> do
         putStrLn "Quitting..."
       [] -> loop sock
-      x -> do 
-        BS.send sock (B.pack msg)
+      x  -> do
+        BS.send sock (B.pack x)
         loop sock
-      
-beat :: IO (String)
-beat = do
-  threadDelay 2000000
-  return "Heartbeat"
 
-compete :: [IO a] -> IO a
-compete actions = do
-  mvar <- newEmptyMVar
-  tids <- mapM (\action -> forkIO $ action >>= putMVar mvar) actions
-  result <- takeMVar mvar
-  mapM_ killThread tids
-  return result
+unpackMaybe :: Maybe String -> String
+unpackMaybe mx = case mx of
+  Nothing -> "Heartbeat"
+  Just x  -> x
 
 doServer :: Int -> IO ()
 doServer port = do
@@ -119,15 +119,15 @@ doServer port = do
   waitForQuit = do
     putStrLn "Type '/quit' to close the server"
     msg <- getLine
-    case msg of 
-      "/quit" -> do 
+    case msg of
+      "/quit" -> do
         putStrLn "Quitting..."
-      [] -> waitForQuit    
+      [] -> waitForQuit
   open port = do
     sock <- socket AF_INET Stream 0
-    setSocketOption sock ReuseAddr 1
+    setSocketOption sock ReuseAddr   1
     setSocketOption sock RecvTimeOut 10000
-    setSocketOption sock SendTimeOut 10000    
+    setSocketOption sock SendTimeOut 10000
     bind sock (SockAddrInet (toEnum port) iNADDR_ANY)
     listen sock 2
     return sock
@@ -137,6 +137,9 @@ doServer port = do
     void $ forkFinally (talk conn) (\_ -> shutdown conn)
   talk conn = do
     -- fork here to have a send "thread"
+
+
+
     msg <- BS.recv conn 256
     unless (B.length msg == 0) $ do
       putStrLn $ (show conn) ++ (B.unpack msg)
