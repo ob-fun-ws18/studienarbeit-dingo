@@ -100,7 +100,7 @@ doClient ipAddr port = do
 beat :: IO (String)
 beat = do
   threadDelay 2000000
-  return "Heatbeat"
+  return "Heartbeat"
 
 compete :: [IO a] -> IO a
 compete actions = do

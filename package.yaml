@@ -39,7 +39,6 @@ executables:
     - network
     - bytestring
     - optparse-applicative
-    - aeson
 
 tests:
   p2pchat-test:
