@@ -1,7 +1,6 @@
 module Main where
 
 import           System.IO
-import           System.Timeout
 import           Network.Socket
 import           Network.Socket.ByteString     as BS
 import qualified Data.ByteString.Char8         as B
@@ -68,7 +67,7 @@ main :: IO ()
 main = withSocketsDo $ do
   hSetBuffering stdout NoBuffering
   main' =<< execParser opts
- where
+  where
   opts = info
     (input <**> helper)
     (fullDesc <> progDesc "P2P Chat Client" <> header
@@ -83,9 +82,9 @@ main' (Input Server port _ ) = doServer port
 doClient :: String -> Int -> IO ()
 doClient ipAddr port = do
   putStrLn "Started Client..."
-  E.bracket (open ipAddr port) close loop
+  E.bracket (open ipAddr port) close start
   return ()
- where
+  where
   resolve host port = do
     let hints = defaultHints { addrSocketType = Stream }
     addr : _ <- getAddrInfo (Just hints) (Just host) (Just (show port))
@@ -95,27 +94,45 @@ doClient ipAddr port = do
     sock <- socket (addrFamily addr) (addrSocketType addr) (addrProtocol addr)
     connect sock $ addrAddress addr
     return sock
-  loop sock = do
-    mmsg <- timeout 20000 getLine
-    case (unpackMaybe $ mmsg) of
+  start sock = do
+    mvar <- newEmptyMVar
+    forkIO $ readWinLine mvar
+    loop sock mvar
+  loop sock mvar = do
+    let actions = [beat]
+    msg <- compete actions mvar
+    case msg of
       "/quit" -> do
         putStrLn "Quitting..."
-      [] -> loop sock
+      [] -> loop sock mvar
       x  -> do
-        BS.send sock (B.pack x)
-        loop sock
+        BS.send sock (B.pack msg)
+        loop sock mvar
 
-unpackMaybe :: Maybe String -> String
-unpackMaybe mx = case mx of
-  Nothing -> "Heartbeat"
-  Just x  -> x
+readWinLine :: MVar String -> IO ()
+readWinLine mvar = do
+  line <- getLine
+  putMVar mvar line
+  readWinLine mvar
+
+beat :: IO (String)
+beat = do
+  threadDelay 2000000
+  return "Heartbeat"
+
+compete :: [IO String] -> MVar String -> IO String
+compete actions mvar = do
+  tids   <- mapM (\action -> forkIO $ action >>= putMVar mvar) actions
+  result <- takeMVar mvar
+  mapM_ killThread tids
+  return result
 
 doServer :: Int -> IO ()
 doServer port = do
   putStrLn "Started Server..."
   id <- forkIO (E.bracket (open port) shutdown loop)
   waitForQuit
- where
+  where
   waitForQuit = do
     putStrLn "Type '/quit' to close the server"
     msg <- getLine
@@ -137,9 +154,6 @@ doServer port = do
     void $ forkFinally (talk conn) (\_ -> shutdown conn)
   talk conn = do
     -- fork here to have a send "thread"
-
-
-
     msg <- BS.recv conn 256
     unless (B.length msg == 0) $ do
       putStrLn $ (show conn) ++ (B.unpack msg)
