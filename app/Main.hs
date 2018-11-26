@@ -8,6 +8,7 @@ import qualified Control.Exception             as E
 import           Control.Monad                  ( unless
                                                 , forever
                                                 , void
+                                                , when
                                                 )
 import           Control.Concurrent             ( forkFinally
                                                 , killThread
@@ -142,9 +143,9 @@ doServer port = do
       [] -> waitForQuit
   open port = do
     sock <- socket AF_INET Stream 0
-    setSocketOption sock ReuseAddr   1
-    setSocketOption sock RecvTimeOut 10000
-    setSocketOption sock SendTimeOut 10000
+    when (isSupportedSocketOption ReuseAddr) $ setSocketOption sock ReuseAddr   1
+    when (isSupportedSocketOption ReuseAddr) $ setSocketOption sock RecvTimeOut 10000
+    when (isSupportedSocketOption ReuseAddr) $ setSocketOption sock SendTimeOut 10000
     bind sock (SockAddrInet (toEnum port) iNADDR_ANY)
     listen sock 2
     return sock
