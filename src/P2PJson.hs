@@ -1,35 +1,44 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module P2PJson where
 
 import GHC.Generics
 import Data.Aeson
 
+-- Response for every Message
 data JsonResp = JsonResp {
-  jsState :: Int
-} deriving (Generic)
+  jsState :: Int -- 200 OK, 500 Error
+} deriving (Show, Generic, ToJSON, FromJSON)
 
-instance ToJSON JsonResp
-instance FromJSON JsonResp
-
+-- Client -> Host, new User
 data JsonConnect = JsonConnect {
-  jsUserId :: String
-} deriving (Generic)
+  jsUserId :: String, -- UUID
+  jsUserName :: String -- Username
+} deriving (Show, Generic, ToJSON, FromJSON)
 
-instance ToJSON JsonConnect
-instance FromJSON JsonConnect
-
+-- Client -> Host: new Message
+-- Host -> Client: new Message
 data JsonMsg = JsonMsg {
-  jsName :: String,
-  jsMsg :: String
-} deriving (Generic)
+  jsName :: String, -- Username
+  jsMsg :: String -- Message
+} deriving (Show, Generic, ToJSON, FromJSON)
 
-instance ToJSON JsonMsg
-instance FromJSON JsonMsg
+data JsonMember = JsonMember {
+  jsMemName :: String
+, jsMemUUID :: String
+, jsMemHost :: String
+, jsMemPort :: Int  
+} deriving (Show, Generic, ToJSON, FromJSON)
 
-data JsonClientList = JsonClientList {
-  cliets :: [String]
-} deriving (Generic)
+-- Host -> Client on client connected
+data JsonClientConnected = JsonClientConnected {
+  jsCCmember :: JsonMember
+, jsCCnewMembers :: [JsonMember]
+} deriving (Show, Generic, ToJSON, FromJSON)
 
-instance ToJSON JsonClientList
-instance FromJSON JsonClientList
+-- Host -> Client on client disconnected
+data JsonClientDisconnected = JsonClientDisconnected {
+  jsCDmember :: JsonMember
+, jsCDnewMembers :: [JsonMember]  
+} deriving (Show, Generic, ToJSON, FromJSON)

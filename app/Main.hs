@@ -36,6 +36,7 @@ main = withSocketsDo $ do
   
 main' :: Args -> IO ()
 main' (Args username port (Just connect)) = do
+  -- change this to use with regex and assert format
   let ipPort = T.splitOn (T.pack ":")  (T.pack connect)
   let ip = T.unpack $ ipPort !! 0
   let port = read $ T.unpack (ipPort !! 1) :: Int
