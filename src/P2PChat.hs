@@ -42,14 +42,12 @@ startHost chans glob = do
   sockId <- startSockHost glob chans
   -- TODO: Error handling
   doHost glob chans sockId
-  killThread sockId
 
 startClient :: Channels -> Global -> String -> Int -> IO ()  
 startClient chans glob host port = do
   sockId <- startSockClient host port glob chans
   -- TODO: needs error handling
   doClient glob chans sockId
-  killThread sockId
 
 doHost :: Global -> Channels -> ThreadId -> IO ()
 doHost glob chans sockId = do
@@ -58,7 +56,7 @@ doHost glob chans sockId = do
     (CmdInput input) -> do 
       writeChan (csock chans) (SockMsgOut input)
       writeChan (ccmd chans) (CmdOutput ((myUserName glob) ++ ": " ++ input))
-    CmdQuit -> putStrLn "LOG: Should exit program here."
+    CmdQuit -> killThread sockId
     (SockHostConnect user members) -> writeChan (ccmd chans) (CmdOutput ("User joined: " ++ user))
     (SockHostDisconnect user members) -> writeChan (ccmd chans) (CmdOutput ("User left: " ++ user))
     (SockMsgIn user msg) -> writeChan (ccmd chans) (CmdOutput (user ++ ": " ++ msg))
@@ -69,13 +67,14 @@ doClient glob chans sockId = do
   event <- readChan (cmain chans)
   case event of
     (CmdInput input) -> writeChan (csock chans) (SockMsgOut input)
-    CmdQuit -> putStrLn "LOG: Should exit program here."
+    CmdQuit -> killThread sockId
     (SockHostConnect user members) -> writeChan (ccmd chans) (CmdOutput ("User joined: " ++ user))
     (SockHostDisconnect user members) -> writeChan (ccmd chans) (CmdOutput ("User left: " ++ user))
     (SockMsgIn user msg) -> writeChan (ccmd chans) (CmdOutput (user ++ ": " ++ msg))
-    SockClientDisconnect -> return ()
+    SockClientDisconnect -> putStrLn "Disconnect"
   unless (isQuit event) (doClient glob chans sockId)
 
 isQuit :: Event -> Bool
 isQuit CmdQuit = True
+isQuit SockClientDisconnect = True -- remove for migration.
 isQuit _ = False

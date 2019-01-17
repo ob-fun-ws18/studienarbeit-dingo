@@ -21,7 +21,7 @@ data SockCLientConnection = SockCLientConnection {
 
 data SockEvent = NewClient SockCLientConnection
                | SockInput SockCLientConnection String -- input from a sock
-               | SockOutput String 
+               | SockOutput String -- msg to output to all clients
                | SockDisconnect SockCLientConnection -- Sock disconnected
 
 startSockHost :: Global -> Channels -> IO ThreadId
@@ -35,10 +35,10 @@ startSockHost glob chan = do
 runHostSock :: Global -> Channels -> Socket -> IO ()
 runHostSock glob chans sock = do
   clientChan <- newChan
-  sockhandlerId <- forkIO $ runSockEventHandler clientChan (csock chans) []
+  -- sockhandlerId <- forkIO $ runSockEventHandler clientChan (csock chans) []
   acceptId <- forkIO $ runAcceptLoop sock clientChan
   loopHostHandler
-  killThread sockhandlerId
+  -- killThread sockhandlerId
   killThread acceptId
 
 loopHostHandler :: IO ()

@@ -9,12 +9,14 @@ import Data.Aeson as A
 
 import Data.Maybe
 import System.IO
+import System.Timeout
 import Network.Socket
 import Control.Concurrent
 import Control.Monad
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as BL
 
+-- TODO: return Maybe, nothing on connection error
 startSockClient :: String -> Int -> Global -> Channels -> IO (ThreadId)
 startSockClient host port glob chans = do
   addrInfo <- getAddrInfo Nothing (Just host) (Just $ show port)
@@ -65,15 +67,43 @@ isDisconnect _ = False
 
 readClientSock :: Handle -> Chan Event -> IO ()
 readClientSock hdl chan = do
-  eof <- hIsEOF hdl
+  -- putStrLn "readClientSock"
+  -- eof <- hIsEOF hdl
+  -- if eof then
+  --   writeChan chan SockClientDisconnect
+  -- else do
+  --   putStrLn "Trying to read..."
+  --   input <- timeout 1000 $ hGetLine hdl
+  --   putStrLn $ "Read " ++ show input
+  --   case input of
+  --     Just i -> do
+  --       case parseJson i of
+  --         Just e -> writeChan chan e
+  --         Nothing -> putStrLn $ "LOG: Client Reading unknown msg " ++ i
+  --       readClientSock hdl chan  
+  --     Nothing -> writeChan chan SockClientDisconnect
+  input <- timeout 1000000 $ readHandle hdl
+  case input of
+    Just i ->
+      case i of
+        Just i -> do
+          case parseJson i of
+            Just e -> writeChan chan e
+            Nothing -> putStrLn $ "LOG: Client Reading unknown msg " ++ i
+          readClientSock hdl chan
+        Nothing -> writeChan chan SockClientDisconnect -- disconnect
+    Nothing -> writeChan chan SockClientDisconnect -- timeout  
+
+-- read handle, return Nothing on eof
+readHandle :: Handle -> IO (Maybe String)
+readHandle handle = do
+  eof <- hIsEOF handle
   if eof then
-    writeChan chan SockClientDisconnect
-  else do  
-    input <- hGetLine hdl
-    case parseJson input of
-      Just e -> writeChan chan e
-      Nothing -> putStrLn $ "LOG: Client Reading unknown msg " ++ input
-    readClientSock hdl chan
+    return Nothing
+  else do
+    input <- hGetLine handle
+    return $ Just input
+
 
 parseJson :: String -> Maybe Event
 parseJson json = Nothing -- TODO: parse JSON
