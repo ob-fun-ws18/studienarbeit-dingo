@@ -13,8 +13,8 @@ import Control.Concurrent.Chan
 data Event = CmdInput String -- Input from commandline
            | CmdQuit -- Quit from commandline
            | CmdOutput String -- String to print on commandline
-           | SockHostConnect String [Member] -- Client Connect, updated list of members
-           | SockHostDisconnect String [Member] -- Client Disconnect, updates list of member
+           | SockHostConnect Member [Member] -- Client Connect, updated list of members
+           | SockHostDisconnect Member [Member] -- Client Disconnect, updates list of member
            | SockMsgIn String String      -- User, Msg sock -> main
            | SockMsgOut String      -- User, Msg main -> sock
            | SockClientDisconnect -- Client Mode: Socket disconnect

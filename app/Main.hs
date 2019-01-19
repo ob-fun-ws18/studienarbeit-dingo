@@ -4,7 +4,7 @@ import P2PChat
   
 import System.IO
 import Network.Socket
-  
+
 import qualified Data.Text as T
 
 -- Option Parser

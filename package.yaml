@@ -27,7 +27,7 @@ dependencies:
 - optparse-applicative
 - aeson
 - uuid
-- containers
+- network-info
 
 library:
   source-dirs: src

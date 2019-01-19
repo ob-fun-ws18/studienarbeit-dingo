@@ -3,42 +3,77 @@
 
 module P2PJson where
 
+import P2PCommon
+
 import GHC.Generics
 import Data.Aeson
 
--- Response for every Message
-data JsonResp = JsonResp {
-  jsState :: Int -- 200 OK, 500 Error
-} deriving (Show, Generic, ToJSON, FromJSON)
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy as BL
 
--- Client -> Host, new User
-data JsonConnect = JsonConnect {
-  jsUserId :: String, -- UUID
-  jsUserName :: String -- Username
-} deriving (Show, Generic, ToJSON, FromJSON)
-
--- Client -> Host: new Message
--- Host -> Client: new Message
-data JsonMsg = JsonMsg {
-  jsName :: String, -- Username
-  jsMsg :: String -- Message
+data JsonMessage = JsonMessage {
+  jsType :: String,
+  jsConnect :: Maybe JsonPayloadConnect,
+  jsClientConnected :: Maybe JsonPayloadClientConnected,
+  jsClientDisconnected :: Maybe JsonPayloadClientDisconnected,
+  jsMessage :: Maybe JsonPayloadMessage
 } deriving (Show, Generic, ToJSON, FromJSON)
 
 data JsonMember = JsonMember {
   jsMemName :: String
 , jsMemUUID :: String
 , jsMemHost :: String
-, jsMemPort :: Int  
+, jsMemPort :: Int -- Port for future Host Service
 } deriving (Show, Generic, ToJSON, FromJSON)
 
--- Host -> Client on client connected
-data JsonClientConnected = JsonClientConnected {
-  jsCCmember :: JsonMember
-, jsCCnewMembers :: [JsonMember]
+data JsonPayloadConnect = JsonPayloadConnect {
+  jspCname :: String,
+  jspCuuid :: String,
+  jspChostPort :: Int
+} deriving (Show, Generic, ToJSON, FromJSON)
+data JsonPayloadClientConnected = JsonPayloadClientConnected {
+  jspCCmember :: JsonMember,
+  jspCCmembers :: [JsonMember] 
+} deriving (Show, Generic, ToJSON, FromJSON)
+data JsonPayloadClientDisconnected = JsonPayloadClientDisconnected {
+  jspCDmember :: JsonMember,
+  jspCDmembers :: [JsonMember] 
+} deriving (Show, Generic, ToJSON, FromJSON)
+data JsonPayloadMessage = JsonPayloadMessage {
+  jspMname :: String,
+  jspMmsg :: String
 } deriving (Show, Generic, ToJSON, FromJSON)
 
--- Host -> Client on client disconnected
-data JsonClientDisconnected = JsonClientDisconnected {
-  jsCDmember :: JsonMember
-, jsCDnewMembers :: [JsonMember]  
-} deriving (Show, Generic, ToJSON, FromJSON)
+jsonEmpty :: String -> JsonMessage
+jsonEmpty str = JsonMessage str Nothing Nothing Nothing Nothing
+
+jsonOK :: JsonMessage
+jsonOK = jsonEmpty "OK"
+
+jsonHeartbeat :: JsonMessage
+jsonHeartbeat = jsonEmpty "Heartbeat"
+
+jsonConnect :: String -> String -> Int -> JsonMessage
+jsonConnect name uuid port = JsonMessage "connect" (Just (JsonPayloadConnect name uuid port)) Nothing Nothing Nothing
+
+isJsonOK :: JsonMessage -> Bool
+jsJsonOK (JsonMessage "OK" _ _ _ _) = True
+isJsonOK _ = False
+
+jsonMessageSend :: String -> String -> JsonMessage
+jsonMessageSend user msg = JsonMessage "message" Nothing Nothing Nothing (Just $ JsonPayloadMessage user msg)
+
+jsonParse :: BL.ByteString -> Maybe JsonMessage
+jsonParse bl = decode bl :: Maybe JsonMessage
+
+jsonParseMember :: JsonMember -> Member
+jsonParseMember (JsonMember n u h p) = Member n u h p
+
+jsonParseMember' :: Member -> JsonMember
+jsonParseMember' (Member n u h p) = JsonMember n u h p
+
+jsonClientConnected :: Member -> [Member] -> JsonMessage
+jsonClientConnected m ms = JsonMessage "clientConnected" Nothing (Just $ JsonPayloadClientConnected (jsonParseMember' m) (map jsonParseMember' ms)) Nothing Nothing
+
+jsonClientDisconnected :: Member -> [Member] -> JsonMessage
+jsonClientDisconnected m ms = JsonMessage "clientDisconnected" Nothing Nothing (Just $ JsonPayloadClientDisconnected (jsonParseMember' m) (map jsonParseMember' ms)) Nothing

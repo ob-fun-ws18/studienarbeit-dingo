@@ -25,41 +25,42 @@ startSockClient host port glob chans = do
   connect sock (addrAddress serverAddr)
   hdl <- socketToHandle sock ReadWriteMode
   hSetBuffering hdl NoBuffering
-  succ <- handshake hdl (myUserName glob) (myUUID glob)
+  succ <- handshake hdl (myUserName glob) (myUUID glob) (myHostPort glob)
   forkIO $ runClientSock glob chans hdl
 
-handshake :: Handle -> String -> String -> IO Bool
-handshake hdl name uuid = do
-  B.hPutStrLn hdl (BL.toStrict (A.encode (JsonConnect uuid name)))
+handshake :: Handle -> String -> String -> Int -> IO Bool
+handshake hdl name uuid port = do
+  B.hPutStrLn hdl (BL.toStrict (A.encode (jsonConnect uuid name port)))
   eof <- hIsEOF hdl
   if eof then 
     return False
   else do
     input <- B.hGetLine hdl
-    let json = A.decode (BL.fromStrict input) :: Maybe JsonResp
-    return $ checkResp json
-
-checkResp :: Maybe JsonResp -> Bool
-checkResp (Just j) = (jsState j) == 200
-checkResp Nothing = False      
+    let json = A.decode (BL.fromStrict input) :: Maybe JsonMessage
+    case json of
+      Just j -> return $ isJsonOK j
+      Nothing -> return False
 
 runClientSock :: Global -> Channels -> Handle -> IO()
 runClientSock glob chans handle = do
   readId <- forkIO $ readClientSock handle (csock chans)
-  loopClientSock glob chans handle
+  outputChan <- newChan
+  outputId <- forkIO $ runSocketOutput handle outputChan
+  loopClientSock glob chans handle outputChan
   hClose handle
   killThread readId
+  killThread outputId
 
-loopClientSock :: Global -> Channels -> Handle -> IO()
-loopClientSock glob chans handle = do
+loopClientSock :: Global -> Channels -> Handle -> Chan JsonMessage -> IO()
+loopClientSock glob chans handle chan = do
   event <- readChan (csock chans)
   case event of
     s@(SockHostConnect _ _) -> writeChan (cmain chans) s
     s@(SockHostDisconnect _ _) -> writeChan (cmain chans) s
     s@(SockMsgIn _ _) -> writeChan (cmain chans) s
-    SockMsgOut msg -> B.hPutStrLn handle (BL.toStrict (A.encode (JsonMsg "" msg))) -- user name not relevant since it will be populated by host
+    SockMsgOut msg -> writeChan chan (jsonMessageSend "" msg)
     s@SockClientDisconnect -> writeChan (cmain chans) s
-  unless (isDisconnect event) $ loopClientSock glob chans handle
+  unless (isDisconnect event) $ loopClientSock glob chans handle chan
 
 isDisconnect :: Event -> Bool
 isDisconnect SockClientDisconnect = True
@@ -67,43 +68,41 @@ isDisconnect _ = False
 
 readClientSock :: Handle -> Chan Event -> IO ()
 readClientSock hdl chan = do
-  -- putStrLn "readClientSock"
-  -- eof <- hIsEOF hdl
-  -- if eof then
-  --   writeChan chan SockClientDisconnect
-  -- else do
-  --   putStrLn "Trying to read..."
-  --   input <- timeout 1000 $ hGetLine hdl
-  --   putStrLn $ "Read " ++ show input
-  --   case input of
-  --     Just i -> do
-  --       case parseJson i of
-  --         Just e -> writeChan chan e
-  --         Nothing -> putStrLn $ "LOG: Client Reading unknown msg " ++ i
-  --       readClientSock hdl chan  
-  --     Nothing -> writeChan chan SockClientDisconnect
   input <- timeout 1000000 $ readHandle hdl
   case input of
     Just i ->
       case i of
         Just i -> do
-          case parseJson i of
-            Just e -> writeChan chan e
-            Nothing -> putStrLn $ "LOG: Client Reading unknown msg " ++ i
+          case jsonParse i of
+            Just m -> handleInput chan m
+            Nothing -> putStrLn $ "LOG: Client Reading unknown msg"
           readClientSock hdl chan
         Nothing -> writeChan chan SockClientDisconnect -- disconnect
     Nothing -> writeChan chan SockClientDisconnect -- timeout  
 
+handleInput :: Chan Event -> JsonMessage -> IO ()
+handleInput chan msg = case msg of
+  (JsonMessage "message" _ _ _ (Just (JsonPayloadMessage user m))) -> writeChan chan (SockMsgIn user m)
+  (JsonMessage "clientConnected" _ (Just (JsonPayloadClientConnected m ms)) _ _) -> writeChan chan (SockHostConnect (jsonParseMember m) [])
+  (JsonMessage "clientDisconnected" _ _ (Just (JsonPayloadClientDisconnected m ms)) _) -> writeChan chan (SockHostDisconnect (jsonParseMember m) [])
+  _ -> return ()
+  
+
+
 -- read handle, return Nothing on eof
-readHandle :: Handle -> IO (Maybe String)
+readHandle :: Handle -> IO (Maybe BL.ByteString)
 readHandle handle = do
   eof <- hIsEOF handle
   if eof then
     return Nothing
   else do
-    input <- hGetLine handle
-    return $ Just input
+    input <- B.hGetLine handle
+    return $ Just $ BL.fromStrict input
 
-
-parseJson :: String -> Maybe Event
-parseJson json = Nothing -- TODO: parse JSON
+runSocketOutput :: Handle -> Chan JsonMessage -> IO ()
+runSocketOutput hdl chan = do
+  msg <- timeout 500000 $ readChan chan
+  case msg of
+    Just m -> B.hPutStrLn hdl $ BL.toStrict $ A.encode m
+    Nothing -> B.hPutStrLn hdl $ BL.toStrict $ A.encode jsonHeartbeat
+  runSocketOutput hdl chan
