@@ -82,8 +82,8 @@ readClientSock hdl chan = do
 handleInput :: Chan Event -> JsonMessage -> IO ()
 handleInput chan msg = case msg of
   (JsonMessage "message" _ _ _ (Just (JsonPayloadMessage user m))) -> writeChan chan (SockMsgIn user m)
-  (JsonMessage "clientConnected" _ (Just (JsonPayloadClientConnected m ms)) _ _) -> writeChan chan (SockHostConnect m [])
-  (JsonMessage "clientDisconnected" _ _ (Just (JsonPayloadClientDisconnected m ms)) _) -> writeChan chan (SockHostDisconnect m [])
+  (JsonMessage "clientConnected" _ (Just (JsonPayloadClientConnected m ms)) _ _) -> writeChan chan (SockHostConnect m ms)
+  (JsonMessage "clientDisconnected" _ _ (Just (JsonPayloadClientDisconnected m ms)) _) -> writeChan chan (SockHostDisconnect m ms)
   _ -> return ()
 
 runSocketOutput :: Handle -> Chan JsonMessage -> IO ()

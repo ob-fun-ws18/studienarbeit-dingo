@@ -59,9 +59,11 @@ doHost glob chans sockId = do
       writeChan (csock chans) (SockMsgOut input)
       writeChan (cterm chans) (CmdOutput ((myUserName glob) ++ ": " ++ input))
     CmdQuit -> killThread sockId
-    (SockHostConnect user members) -> writeChan (cterm chans) (CmdOutput ("User joined: " ++ (mUsername user)))
-    (SockHostDisconnect user members) -> writeChan (cterm chans) (CmdOutput ("User left: " ++ (mUsername user)))
-    (SockMsgIn user msg) -> writeChan (cterm chans) (CmdOutput (user ++ ": " ++ msg))
+    (SockHostConnect user members) ->
+      writeChan (cterm chans) (CmdOutput ("User joined: " ++ (mUsername user) ++ " -> " ++ show members))
+    (SockHostDisconnect user members) ->
+      writeChan (cterm chans) (CmdOutput ("User left: " ++ (mUsername user)  ++ " -> " ++ show members))
+    (SockMsgIn user msg) -> writeChan (cterm chans) (CmdOutput (">>>>> " ++ user ++ ": " ++ msg))
   unless (isQuit event) (doHost glob chans sockId)
 
 doClient :: Global -> Channels -> ThreadId -> IO ()
@@ -70,8 +72,10 @@ doClient glob chans sockId = do
   case event of
     (CmdInput input) -> writeChan (csock chans) (SockMsgOut input)
     CmdQuit -> killThread sockId
-    (SockHostConnect user members) -> writeChan (cterm chans) (CmdOutput ("User joined: " ++ (mUsername user)))
-    (SockHostDisconnect user members) -> writeChan (cterm chans) (CmdOutput ("User left: " ++ (mUsername user)))
-    (SockMsgIn user msg) -> writeChan (cterm chans) (CmdOutput (user ++ ": " ++ msg))
+    (SockHostConnect user members) ->
+      writeChan (cterm chans) (CmdOutput ("User joined: " ++ (mUsername user)  ++ " -> " ++ show members))
+    (SockHostDisconnect user members) ->
+      writeChan (cterm chans) (CmdOutput ("User left: " ++ (mUsername user)  ++ " -> " ++ show members))
+    (SockMsgIn user msg) -> writeChan (cterm chans) (CmdOutput (">>>>> " ++ user ++ ": " ++ msg))
     SockClientDisconnect -> putStrLn "Disconnect"
   unless (isQuit event) (doClient glob chans sockId)

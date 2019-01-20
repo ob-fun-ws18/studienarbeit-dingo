@@ -19,7 +19,7 @@ import qualified Data.ByteString.Lazy as BL
 data SockCLientConnection = SockCLientConnection {
   member :: Member
 , clientHandle :: Handle
-}
+} deriving (Show, Eq)
 
 data SockEvent = NewClient SockCLientConnection
                | SockInput SockCLientConnection String -- input from a sock
@@ -36,27 +36,33 @@ startSocketHost glob chan = do
 
 runHostSock :: Global -> Channels -> Socket -> IO ()
 runHostSock glob chans sock = do
-  clientChan <- newChan
-  clientMsgChan <- newChan
+  clientChan <- newChan :: IO (Chan SockEvent)
+  clientMsgChan <- newChan :: IO (Chan JsonMessage)
   sockhandlerId <- forkIO $ runSockEventHandler clientChan (csock chans) clientMsgChan []
   acceptId <- forkIO $ runAcceptLoop sock clientChan clientMsgChan
-  loopHostHandler
+  loopHostHandler glob chans clientMsgChan
   close sock
   killThread sockhandlerId
   killThread acceptId
 
-loopHostHandler :: IO ()
-loopHostHandler = do
-  loopHostHandler
+loopHostHandler :: Global -> Channels -> Chan JsonMessage -> IO ()
+loopHostHandler glob chans chanJson = do
+  event <- readChan (csock chans)
+  case event of
+    s@(SockHostConnect _ _) -> writeChan (cmain chans) s
+    s@(SockHostDisconnect _ _) -> writeChan (cmain chans) s
+    s@(SockMsgIn _ _) -> writeChan (cmain chans) s
+    SockMsgOut msg -> writeChan chanJson (jsonMessageSend (myUserName glob) msg)
+    s@SockClientDisconnect -> writeChan (cmain chans) s
+  loopHostHandler glob chans chanJson
 
 runAcceptLoop :: Socket -> Chan SockEvent -> Chan JsonMessage -> IO ()
 runAcceptLoop sock chan chanJson = do
   (con, peer) <- accept sock
-  putStrLn $ "DEBUG: New Connection: " ++ show peer
   hdl <- socketToHandle con ReadWriteMode
   hSetBuffering hdl NoBuffering
   eof <- hIsEOF hdl
-  if not eof then do
+  when (not eof) $ do
     input <- B.hGetLine hdl
     let json = A.decode (BL.fromStrict input) :: Maybe JsonMessage
     case json of
@@ -65,11 +71,9 @@ runAcceptLoop sock chan chanJson = do
         let sockCon = SockCLientConnection (Member n u "" p) hdl -- TODO: parse IP from socket
         writeChan chan (NewClient sockCon)
         clientChan <- dupChan chanJson
-        forkIO $ runClientHandler sockCon chanJson chan
-        putStrLn "DEBUG: Forked new Client"
+        forkIO $ runClientHandler sockCon clientChan chan
+        putStrLn ""
       _ -> putStrLn $ "DEBUG: Unknown connect msg: " ++ show input
-  else 
-    putStrLn "DEBUG: Unknown Client Connect, eof"
   runAcceptLoop sock chan chanJson
 
 -- Handles Input from ALL client sockets, has list of all Clients
@@ -78,17 +82,23 @@ runSockEventHandler chanClient chanHost chanClients members = do
   sockEvent <- readChan chanClient
   case sockEvent of
     NewClient c -> do 
-      writeChan chanClients (jsonClientConnected (member c) [] )
-      writeChan chanHost $ SockHostConnect (member c) []
+      let newMembers = members ++ [c]
+      writeChan chanClients (jsonClientConnected (member c) (map member newMembers))
+      writeChan chanHost $ SockHostConnect (member c) (map member newMembers)
+      runSockEventHandler chanClient chanHost chanClients newMembers
     SockInput c m -> do 
       writeChan chanHost $ SockMsgIn (mUsername $ member c) m
       writeChan chanClients (jsonMessageSend (mUsername $ member c) m)
+      runSockEventHandler chanClient chanHost chanClients members
     SockOutput user msg -> do
       writeChan chanClients $ jsonMessageSend user msg
+      runSockEventHandler chanClient chanHost chanClients members
     SockDisconnect c -> do
-      writeChan chanClients (jsonClientDisconnected (member c) [] )
-      writeChan chanHost $ SockHostDisconnect (member c) []
-  runSockEventHandler chanClient chanHost chanClients members
+      let uuid = mUUID $ member c
+      let newMembers = filter (\x -> mUUID (member x) /= uuid ) members
+      writeChan chanClients (jsonClientDisconnected (member c) (map member newMembers))
+      writeChan chanHost $ SockHostDisconnect (member c) (map member newMembers)
+      runSockEventHandler chanClient chanHost chanClients newMembers
 
 runClientHandler :: SockCLientConnection -> Chan JsonMessage -> Chan SockEvent -> IO ()
 runClientHandler sock chanJson chanSockEvent = do
