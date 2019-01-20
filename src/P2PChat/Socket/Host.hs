@@ -28,13 +28,9 @@ data SockEvent = NewClient SockCLientConnection
 
 startSocketHost :: Global -> Channels -> IO ThreadId
 startSocketHost glob chan = do
-  putStrLn "startSockHost"
   sock <- socket AF_INET Stream 0
   let addr = SockAddrInet (toEnum (myHostPort glob)) iNADDR_ANY
-  putStrLn $ show addr
   bind sock addr
-  addr2 <- getSocketName sock
-  putStrLn $ show addr2
   listen sock 2
   forkIO $ runHostSock glob chan sock
 
@@ -45,6 +41,7 @@ runHostSock glob chans sock = do
   sockhandlerId <- forkIO $ runSockEventHandler clientChan (csock chans) clientMsgChan []
   acceptId <- forkIO $ runAcceptLoop sock clientChan clientMsgChan
   loopHostHandler
+  close sock
   killThread sockhandlerId
   killThread acceptId
 
@@ -54,9 +51,8 @@ loopHostHandler = do
 
 runAcceptLoop :: Socket -> Chan SockEvent -> Chan JsonMessage -> IO ()
 runAcceptLoop sock chan chanJson = do
-  putStrLn "runAcceptLoop"
   (con, peer) <- accept sock
-  putStrLn $ "New Connection: " ++ show peer
+  putStrLn $ "DEBUG: New Connection: " ++ show peer
   hdl <- socketToHandle con ReadWriteMode
   hSetBuffering hdl NoBuffering
   eof <- hIsEOF hdl
@@ -68,13 +64,12 @@ runAcceptLoop sock chan chanJson = do
         B.hPutStrLn hdl (BL.toStrict (A.encode jsonOK))
         let sockCon = SockCLientConnection (Member n u "" p) hdl -- TODO: parse IP from socket
         writeChan chan (NewClient sockCon)
-        forkIO $ readClientConnection sockCon chan
         clientChan <- dupChan chanJson
-        forkIO $ runSocketOutput hdl clientChan
-        putStrLn "Forked new Client"
-      _ -> putStrLn $ "Unknown connect msg: " ++ show input
+        forkIO $ runClientHandler sockCon chanJson chan
+        putStrLn "DEBUG: Forked new Client"
+      _ -> putStrLn $ "DEBUG: Unknown connect msg: " ++ show input
   else 
-    putStrLn "Unknown Client Connect, eof"
+    putStrLn "DEBUG: Unknown Client Connect, eof"
   runAcceptLoop sock chan chanJson
 
 -- Handles Input from ALL client sockets, has list of all Clients
@@ -95,6 +90,14 @@ runSockEventHandler chanClient chanHost chanClients members = do
       writeChan chanHost $ SockHostDisconnect (member c) []
   runSockEventHandler chanClient chanHost chanClients members
 
+runClientHandler :: SockCLientConnection -> Chan JsonMessage -> Chan SockEvent -> IO ()
+runClientHandler sock chanJson chanSockEvent = do
+  outputId <- forkIO $ runSocketOutput (clientHandle sock) chanJson
+  readClientConnection sock chanSockEvent
+  killThread outputId
+  hClose (clientHandle sock)
+  writeChan chanSockEvent (SockDisconnect sock)
+
 runSocketOutput :: Handle -> Chan JsonMessage -> IO ()
 runSocketOutput hdl chan = do
   msg <- timeout 500000 $ readChan chan
@@ -112,10 +115,10 @@ readClientConnection client chan = do
         Just i -> do
           case jsonParse i of
             Just m -> handleInput client chan m
-            Nothing -> putStrLn $ "LOG: Client Reading unknown msg"
+            Nothing -> putStrLn $ "DEBUG: Client Reading unknown msg"
           readClientConnection client chan
-        Nothing -> writeChan chan (SockDisconnect client) -- disconnect
-    Nothing -> writeChan chan (SockDisconnect client) -- timeout
+        Nothing -> return ()
+    Nothing -> return ()
 
 handleInput :: SockCLientConnection -> Chan SockEvent -> JsonMessage -> IO ()
 handleInput client chan msg = case msg of

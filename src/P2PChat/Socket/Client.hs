@@ -28,12 +28,12 @@ startSocketClient host port glob chans = do
   if success then do
     id <- forkIO $ runClientSock glob chans hdl
     return $ Just id
-  else 
+  else
     return Nothing
 
 handshake :: Handle -> String -> String -> Int -> IO Bool
 handshake hdl name uuid port = do
-  B.hPutStrLn hdl (BL.toStrict (A.encode (jsonConnect uuid name port)))
+  B.hPutStrLn hdl (BL.toStrict (A.encode (jsonConnect name uuid port)))
   eof <- hIsEOF hdl -- TODO: timeout
   if eof then
     return False
@@ -74,7 +74,7 @@ readClientSock hdl chan = do
         Just i -> do
           case jsonParse i of
             Just m -> handleInput chan m
-            Nothing -> putStrLn $ "LOG: Client Reading unknown msg"
+            Nothing -> putStrLn $ "DEBUG: Client Reading unknown msg"
           readClientSock hdl chan
         Nothing -> writeChan chan SockClientDisconnect -- disconnect
     Nothing -> writeChan chan SockClientDisconnect -- timeout  

@@ -10,7 +10,6 @@ import P2PChat.Common
 import P2PChat.Term
 import P2PChat.Socket.Client
 import P2PChat.Socket.Host
--- import P2PSockHost
 
 import Network.Socket
 

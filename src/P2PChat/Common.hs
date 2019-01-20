@@ -46,7 +46,7 @@ data Global = Global {
   myUserName :: String
 , myUUID :: String
 , myHostPort :: Int
-}
+} deriving (Show, Eq)
 
 data Member = Member {
   mUsername :: String
@@ -110,5 +110,5 @@ jsonParse :: BL.ByteString -> Maybe JsonMessage
 jsonParse bl = decode bl :: Maybe JsonMessage
 
 isJsonOK :: JsonMessage -> Bool
-jsJsonOK (JsonMessage "OK" _ _ _ _) = True
+isJsonOK (JsonMessage "OK" _ _ _ _) = True
 isJsonOK _ = False
