@@ -1,15 +1,15 @@
-module P2PTerm (
-  startCmd
+module P2PChat.Term (
+  startTerminal
 ) where
 
-import P2PCommon
+import P2PChat.Common
 import Control.Concurrent
 import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
 
-startCmd :: Chan Event -> Chan Event-> IO ThreadId
-startCmd cmain cterm = do 
-  forkIO $ readCmd cterm
-  forkIO $ readCterm cterm cmain
+startTerminal :: Channels -> IO ThreadId
+startTerminal chans = do 
+  forkIO $ readCmd (cterm chans)
+  forkIO $ readCterm (cterm chans) (cmain chans)
 
 readCterm :: Chan Event -> Chan Event -> IO ()
 readCterm ccmd cmain = do

@@ -1,9 +1,9 @@
-module P2PSockHost (
-  startSockHost
+module P2PChat.Socket.Host (
+  startSocketHost
 ) where
 
-import P2PCommon
-import P2PJson
+import P2PChat.Common
+import P2PChat.Socket
 
 import Data.Aeson as A
 
@@ -26,8 +26,8 @@ data SockEvent = NewClient SockCLientConnection
                | SockOutput String String -- msg to output to all clients
                | SockDisconnect SockCLientConnection -- Sock disconnected
 
-startSockHost :: Global -> Channels -> IO ThreadId
-startSockHost glob chan = do
+startSocketHost :: Global -> Channels -> IO ThreadId
+startSocketHost glob chan = do
   putStrLn "startSockHost"
   sock <- socket AF_INET Stream 0
   let addr = SockAddrInet (toEnum (myHostPort glob)) iNADDR_ANY
@@ -49,7 +49,7 @@ runHostSock glob chans sock = do
   killThread acceptId
 
 loopHostHandler :: IO ()
-loopHostHandler = do 
+loopHostHandler = do
   loopHostHandler
 
 runAcceptLoop :: Socket -> Chan SockEvent -> Chan JsonMessage -> IO ()
@@ -77,7 +77,7 @@ runAcceptLoop sock chan chanJson = do
     putStrLn "Unknown Client Connect, eof"
   runAcceptLoop sock chan chanJson
 
--- Handles Input from client sockets, has list of all Clients
+-- Handles Input from ALL client sockets, has list of all Clients
 runSockEventHandler :: Chan SockEvent -> Chan Event -> Chan JsonMessage -> [SockCLientConnection] -> IO ()
 runSockEventHandler chanClient chanHost chanClients members = do
   sockEvent <- readChan chanClient
@@ -86,7 +86,7 @@ runSockEventHandler chanClient chanHost chanClients members = do
       writeChan chanClients (jsonClientConnected (member c) [] )
       writeChan chanHost $ SockHostConnect (member c) []
     SockInput c m -> do 
-      writeChan chanHost $ SockMsgIn "Foo" m -- TODO: fix this
+      writeChan chanHost $ SockMsgIn (mUsername $ member c) m
       writeChan chanClients (jsonMessageSend (mUsername $ member c) m)
     SockOutput user msg -> do
       writeChan chanClients $ jsonMessageSend user msg
@@ -121,13 +121,3 @@ handleInput :: SockCLientConnection -> Chan SockEvent -> JsonMessage -> IO ()
 handleInput client chan msg = case msg of
   (JsonMessage "message" _ _ _ (Just (JsonPayloadMessage user m))) -> writeChan chan (SockInput client m)
   _ -> return ()
-
--- read handle, return Nothing on eof
-readHandle :: Handle -> IO (Maybe BL.ByteString)
-readHandle handle = do
-  eof <- hIsEOF handle
-  if eof then
-    return Nothing
-  else do
-    input <- B.hGetLine handle
-    return $ Just $ BL.fromStrict input   

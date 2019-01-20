@@ -6,10 +6,11 @@ module P2PChat (
 , StartMode(..)
 ) where
 
-import P2PCommon
-import P2PTerm
-import P2PSockClient
-import P2PSockHost
+import P2PChat.Common
+import P2PChat.Term
+import P2PChat.Socket.Client
+import P2PChat.Socket.Host
+-- import P2PSockHost
 
 import Network.Socket
 
@@ -27,8 +28,8 @@ startP2PChat cfg = do
   chanMain <- newChan
   chanCmdOut <- newChan
   chanSockOut <- newChan
-  let chans = Channels { cmain=chanMain, ccmd=chanCmdOut, csock=chanSockOut }
-  cmdId <- startCmd (cmain chans) (ccmd chans)
+  let chans = Channels { cmain=chanMain, cterm=chanCmdOut, csock=chanSockOut }
+  cmdId <- startTerminal chans
   startP2PChat' (mode cfg) chans globals
   killThread cmdId
   putStrLn "Ending P2PChat"
@@ -39,15 +40,17 @@ startP2PChat' (StartClient ip port) chans glob = startClient chans glob ip port
 
 startHost :: Channels -> Global -> IO ()
 startHost chans glob = do
-  sockId <- startSockHost glob chans
+  sockId <- startSocketHost glob chans
   -- TODO: Error handling
   doHost glob chans sockId
 
 startClient :: Channels -> Global -> String -> Int -> IO ()  
 startClient chans glob host port = do
-  sockId <- startSockClient host port glob chans
+  sockId <- startSocketClient host port glob chans
   -- TODO: needs error handling
-  doClient glob chans sockId
+  case sockId of
+    Just id -> doClient glob chans id
+    Nothing -> return ()
 
 doHost :: Global -> Channels -> ThreadId -> IO ()
 doHost glob chans sockId = do
@@ -55,11 +58,11 @@ doHost glob chans sockId = do
   case event of
     (CmdInput input) -> do 
       writeChan (csock chans) (SockMsgOut input)
-      writeChan (ccmd chans) (CmdOutput ((myUserName glob) ++ ": " ++ input))
+      writeChan (cterm chans) (CmdOutput ((myUserName glob) ++ ": " ++ input))
     CmdQuit -> killThread sockId
-    (SockHostConnect user members) -> writeChan (ccmd chans) (CmdOutput ("User joined: " ++ (mUsername user)))
-    (SockHostDisconnect user members) -> writeChan (ccmd chans) (CmdOutput ("User left: " ++ (mUsername user)))
-    (SockMsgIn user msg) -> writeChan (ccmd chans) (CmdOutput (user ++ ": " ++ msg))
+    (SockHostConnect user members) -> writeChan (cterm chans) (CmdOutput ("User joined: " ++ (mUsername user)))
+    (SockHostDisconnect user members) -> writeChan (cterm chans) (CmdOutput ("User left: " ++ (mUsername user)))
+    (SockMsgIn user msg) -> writeChan (cterm chans) (CmdOutput (user ++ ": " ++ msg))
   unless (isQuit event) (doHost glob chans sockId)
 
 doClient :: Global -> Channels -> ThreadId -> IO ()
@@ -68,13 +71,8 @@ doClient glob chans sockId = do
   case event of
     (CmdInput input) -> writeChan (csock chans) (SockMsgOut input)
     CmdQuit -> killThread sockId
-    (SockHostConnect user members) -> writeChan (ccmd chans) (CmdOutput ("User joined: " ++ (mUsername user)))
-    (SockHostDisconnect user members) -> writeChan (ccmd chans) (CmdOutput ("User left: " ++ (mUsername user)))
-    (SockMsgIn user msg) -> writeChan (ccmd chans) (CmdOutput (user ++ ": " ++ msg))
+    (SockHostConnect user members) -> writeChan (cterm chans) (CmdOutput ("User joined: " ++ (mUsername user)))
+    (SockHostDisconnect user members) -> writeChan (cterm chans) (CmdOutput ("User left: " ++ (mUsername user)))
+    (SockMsgIn user msg) -> writeChan (cterm chans) (CmdOutput (user ++ ": " ++ msg))
     SockClientDisconnect -> putStrLn "Disconnect"
   unless (isQuit event) (doClient glob chans sockId)
-
-isQuit :: Event -> Bool
-isQuit CmdQuit = True
-isQuit SockClientDisconnect = True -- remove for migration.
-isQuit _ = False
