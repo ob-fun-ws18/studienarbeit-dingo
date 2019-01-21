@@ -29,5 +29,5 @@ fromSockAddr :: SockAddr -> (String, Int)
 fromSockAddr (SockAddrInet  pn   ha)    = (hostAddrToString ha,  fromIntegral pn)
 
 hostAddrToString :: HostAddress -> String
-hostAddrToString addr = concat $ intersperse "." $ map show [d1,d2,d3,d4]
+hostAddrToString addr = intercalate "." $ map show [d1,d2,d3,d4]
  where (d1,d2,d3,d4) = hostAddressToTuple addr

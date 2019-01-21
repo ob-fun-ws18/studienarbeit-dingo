@@ -62,7 +62,7 @@ runAcceptLoop sock chan chanJson = do
   hdl <- socketToHandle con ReadWriteMode
   hSetBuffering hdl NoBuffering
   eof <- hIsEOF hdl
-  when (not eof) $ do
+  unless eof $ do
     input <- B.hGetLine hdl
     let json = A.decode (BL.fromStrict input) :: Maybe JsonMessage
     case json of
@@ -128,7 +128,7 @@ readClientConnection client chan = do
         Just i -> do
           case jsonParse i of
             Just m -> handleInput client chan m
-            Nothing -> putStrLn $ "DEBUG: Client Reading unknown msg"
+            Nothing -> putStrLn "DEBUG: Client Reading unknown msg"
           readClientConnection client chan
         Nothing -> return ()
     Nothing -> return ()

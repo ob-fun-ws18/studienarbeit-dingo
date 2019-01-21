@@ -74,7 +74,7 @@ readClientSock hdl chan = do
         Just i -> do
           case jsonParse i of
             Just m -> handleInput chan m
-            Nothing -> putStrLn $ "DEBUG: Client Reading unknown msg"
+            Nothing -> putStrLn "DEBUG: Client Reading unknown msg"
           readClientSock hdl chan
         Nothing -> writeChan chan SockClientDisconnect -- disconnect
     Nothing -> writeChan chan SockClientDisconnect -- timeout  

@@ -20,8 +20,8 @@ data Args = Args
 args :: Parser Args
 args = Args
   <$> strOption (short 'u' <> long "username")
-  <*> option auto (short 'p' <> long "port" <> value 4242)
-  <*> (optional $ strOption $ short 'c' <> long "connect")
+  <*> option auto (short 'p' <> long "server-port" <> value 4242)
+  <*> optional (strOption $ short 'c' <> long "connect")
   
 main :: IO ()
 main = withSocketsDo $ do
@@ -38,7 +38,7 @@ main' :: Args -> IO ()
 main' (Args username port (Just connect)) = do
   -- change this to use with regex and assert format
   let ipPort = T.splitOn (T.pack ":")  (T.pack connect)
-  let ip = T.unpack $ ipPort !! 0
+  let ip = T.unpack $ head ipPort
   let port = read $ T.unpack (ipPort !! 1) :: Int
   startP2PChat $ StartConfig username port (StartClient ip port)
 main' (Args username port Nothing) = startP2PChat $ StartConfig username port StartHost
