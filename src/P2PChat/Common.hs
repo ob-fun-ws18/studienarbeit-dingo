@@ -26,7 +26,6 @@ isDisconnect _ = False
 
 isQuit :: Event -> Bool
 isQuit CmdQuit = True
-isQuit SockClientDisconnect = True -- TODO: remove for migration.
 isQuit _ = False
 
 data StartMode = StartHost | StartClient String Int

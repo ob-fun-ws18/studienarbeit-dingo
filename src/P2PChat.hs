@@ -48,7 +48,7 @@ startClient chans glob host port = do
   sockId <- startSocketClient host port glob chans
   -- TODO: needs error handling
   case sockId of
-    Just id -> doClient glob chans id
+    Just id -> doClient glob chans id []
     Nothing -> return ()
 
 doHost :: Global -> Channels -> ThreadId -> IO ()
@@ -66,16 +66,40 @@ doHost glob chans sockId = do
     (SockMsgIn user msg) -> writeChan (cterm chans) (CmdOutput (">>>>> " ++ user ++ ": " ++ msg))
   unless (isQuit event) (doHost glob chans sockId)
 
-doClient :: Global -> Channels -> ThreadId -> IO ()
-doClient glob chans sockId = do
+doClient :: Global -> Channels -> ThreadId -> [Member] -> IO ()
+doClient glob chans sockId ms = do
   event <- readChan (cmain chans)
   case event of
-    (CmdInput input) -> writeChan (csock chans) (SockMsgOut input)
-    CmdQuit -> killThread sockId
-    (SockHostConnect user members) ->
+    (CmdInput input) -> do 
+      writeChan (csock chans) (SockMsgOut input)
+      unless (isQuit event) (doClient glob chans sockId ms)
+    CmdQuit -> do 
+      killThread sockId
+      unless (isQuit event) (doClient glob chans sockId ms)
+    (SockHostConnect user members) -> do
       writeChan (cterm chans) (CmdOutput ("User joined: " ++ (mUsername user)  ++ " -> " ++ show members))
-    (SockHostDisconnect user members) ->
+      unless (isQuit event) (doClient glob chans sockId members)
+    (SockHostDisconnect user members) -> do
       writeChan (cterm chans) (CmdOutput ("User left: " ++ (mUsername user)  ++ " -> " ++ show members))
-    (SockMsgIn user msg) -> writeChan (cterm chans) (CmdOutput (">>>>> " ++ user ++ ": " ++ msg))
-    SockClientDisconnect -> putStrLn "Disconnect"
-  unless (isQuit event) (doClient glob chans sockId)
+      unless (isQuit event) (doClient glob chans sockId members)
+    (SockMsgIn user msg) -> do 
+      writeChan (cterm chans) (CmdOutput (">>>>> " ++ user ++ ": " ++ msg))
+      unless (isQuit event) (doClient glob chans sockId ms)
+    SockClientDisconnect -> do 
+      handleClientMigration glob chans sockId ms
+
+handleClientMigration :: Global -> Channels -> ThreadId -> [Member] -> IO()
+handleClientMigration glob chans sockId [m] = putStrLn "Disconnect (only us left, close down)"
+handleClientMigration glob chans sockId (m:ms) = do 
+  killThread sockId -- kill current client
+  let newHostname = mHostname m
+      newPort = mPort m
+  if myUUID glob == mUUID m
+    then do -- We are to be server
+      putStrLn $ "Migrating to host on port: " ++ (show newPort)
+      startHost chans (Global (myUserName glob) (myUUID glob) newPort)
+    else do -- Migrate to new Server
+      threadDelay 1000000 --dont connect immediately, server needs to migrate!      
+      putStrLn $ "Connecting to new Host: " ++ (concat [newHostname, ":", (show newPort)])
+      startClient chans glob newHostname newPort
+

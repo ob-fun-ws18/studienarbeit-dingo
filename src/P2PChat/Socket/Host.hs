@@ -67,8 +67,10 @@ runAcceptLoop sock chan chanJson = do
     let json = A.decode (BL.fromStrict input) :: Maybe JsonMessage
     case json of
       Just (JsonMessage "connect" (Just (JsonPayloadConnect n u p)) _ _ _) -> do
+        peerName <- getPeerName con
+        let (addr, port) = fromSockAddr peerName
         B.hPutStrLn hdl (BL.toStrict (A.encode jsonOK))
-        let sockCon = SockCLientConnection (Member n u "" p) hdl -- TODO: parse IP from socket
+        let sockCon = SockCLientConnection (Member n u addr port) hdl
         writeChan chan (NewClient sockCon)
         clientChan <- dupChan chanJson
         forkIO $ runClientHandler sockCon clientChan chan
@@ -99,6 +101,7 @@ runSockEventHandler chanClient chanHost chanClients members = do
       writeChan chanClients (jsonClientDisconnected (member c) (map member newMembers))
       writeChan chanHost $ SockHostDisconnect (member c) (map member newMembers)
       runSockEventHandler chanClient chanHost chanClients newMembers
+
 
 runClientHandler :: SockCLientConnection -> Chan JsonMessage -> Chan SockEvent -> IO ()
 runClientHandler sock chanJson chanSockEvent = do

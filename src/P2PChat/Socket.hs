@@ -1,9 +1,12 @@
 module P2PChat.Socket (
-  readHandle
+  readHandle,
+  fromSockAddr
 ) where
 
 import System.IO
+import Network.Socket
 import Control.Exception
+import Data.List (intersperse)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as BL
 
@@ -21,3 +24,10 @@ readHandle' handle = do
   else do
     input <- B.hGetLine handle
     return $ Just $ BL.fromStrict input
+
+fromSockAddr :: SockAddr -> (String, Int)
+fromSockAddr (SockAddrInet  pn   ha)    = (hostAddrToString ha,  fromIntegral pn)
+
+hostAddrToString :: HostAddress -> String
+hostAddrToString addr = concat $ intersperse "." $ map show [d1,d2,d3,d4]
+ where (d1,d2,d3,d4) = hostAddressToTuple addr
