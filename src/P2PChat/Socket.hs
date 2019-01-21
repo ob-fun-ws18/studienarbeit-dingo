@@ -6,7 +6,7 @@ module P2PChat.Socket (
 import System.IO
 import Network.Socket
 import Control.Exception
-import Data.List (intersperse)
+import Data.List (intercalate)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as BL
 
