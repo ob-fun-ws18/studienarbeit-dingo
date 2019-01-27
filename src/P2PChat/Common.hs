@@ -77,47 +77,32 @@ data JsonMessage = JsonMessage {
   jsClientConnected :: Maybe JsonPayloadClientConnected,
   jsClientDisconnected :: Maybe JsonPayloadClientDisconnected,
   jsMessage :: Maybe JsonPayloadMessage
-} deriving (Show, Generic, ToJSON, FromJSON)
-
-instance Eq JsonMessage where
-  (JsonMessage t1 con1 cCon1 cDisc1 msg1) == (JsonMessage t2 con2 cCon2 cDisc2 msg2) = (t1 == t2) && (con1 == con2) && (cCon1 == cCon2) && (cDisc1 == cDisc2) && (msg1 == msg2)
+} deriving (Show, Generic, ToJSON, FromJSON, Eq)
 
 -- | JsonPayload when connection
 data JsonPayloadConnect = JsonPayloadConnect {
   jspCname :: String,
   jspCuuid :: String,
   jspChostPort :: Int
-} deriving (Show, Generic, ToJSON, FromJSON)
-
-instance Eq JsonPayloadConnect where
-  (JsonPayloadConnect x1 x2 x3) == (JsonPayloadConnect y1 y2 y3) = (x1 == y1) && (x2 == y2) && (x3 == y3)
+} deriving (Show, Generic, ToJSON, FromJSON, Eq)
 
 -- | JsonPayload when a client connected
 data JsonPayloadClientConnected = JsonPayloadClientConnected {
   jspCCmember :: Member,
   jspCCmembers :: [Member] 
-} deriving (Show, Generic, ToJSON, FromJSON)
-
-instance Eq JsonPayloadClientConnected where
-  (JsonPayloadClientConnected x1 x2) == (JsonPayloadClientConnected y1 y2) = (x1 == y1) && (x2 == y2)
+} deriving (Show, Generic, ToJSON, FromJSON, Eq)
 
 -- | JsonPayload when a client disconnected
 data JsonPayloadClientDisconnected = JsonPayloadClientDisconnected {
   jspCDmember :: Member,
   jspCDmembers :: [Member] 
-} deriving (Show, Generic, ToJSON, FromJSON)
-
-instance Eq JsonPayloadClientDisconnected where
-  (JsonPayloadClientDisconnected x1 x2) == (JsonPayloadClientDisconnected y1 y2) = (x1 == y1) && (x2 == y2)
+} deriving (Show, Generic, ToJSON, FromJSON, Eq)
 
 -- | JsonPayload when sending a message
 data JsonPayloadMessage = JsonPayloadMessage {
   jspMname :: String,
   jspMmsg :: String
-} deriving (Show, Generic, ToJSON, FromJSON)
-
-instance Eq JsonPayloadMessage where
-  (JsonPayloadMessage x1 x2) == (JsonPayloadMessage y1 y2) = (x1 == y1) && (x2 == y2)
+} deriving (Show, Generic, ToJSON, FromJSON, Eq)
 
 -- JSON consctruction helpers
 -- | Helper to Construct an empty Message
