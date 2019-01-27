@@ -33,7 +33,7 @@ startSocketClient host port glob chans = do
   addrInfo <- getAddrInfo Nothing (Just host) (Just $ show port)
   let serverAddr = head addrInfo
   sock <- socket (addrFamily serverAddr) Stream defaultProtocol
-  connect sock (addrAddress serverAddr) -- TODO: timeout & return Nothing
+  connect sock (addrAddress serverAddr)
   hdl <- socketToHandle sock ReadWriteMode
   hSetBuffering hdl NoBuffering
   success <- handshake hdl (myUserName glob) (myUUID glob) (myHostPort glob)
@@ -51,7 +51,7 @@ handshake :: Handle  -- ^ Handle to the server
           -> IO Bool -- ^ True if successfull
 handshake hdl name uuid port = do
   B.hPutStrLn hdl (BL.toStrict (A.encode (jsonConnect name uuid port)))
-  eof <- hIsEOF hdl -- TODO: timeout
+  eof <- hIsEOF hdl
   if eof then
     return False
   else do
