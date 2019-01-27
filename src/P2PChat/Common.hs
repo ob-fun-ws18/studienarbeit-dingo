@@ -77,32 +77,32 @@ data JsonMessage = JsonMessage {
   jsClientConnected :: Maybe JsonPayloadClientConnected,
   jsClientDisconnected :: Maybe JsonPayloadClientDisconnected,
   jsMessage :: Maybe JsonPayloadMessage
-} deriving (Show, Generic, ToJSON, FromJSON)
+} deriving (Show, Generic, ToJSON, FromJSON, Eq)
 
 -- | JsonPayload when connection
 data JsonPayloadConnect = JsonPayloadConnect {
   jspCname :: String,
   jspCuuid :: String,
   jspChostPort :: Int
-} deriving (Show, Generic, ToJSON, FromJSON)
+} deriving (Show, Generic, ToJSON, FromJSON, Eq)
 
 -- | JsonPayload when a client connected
 data JsonPayloadClientConnected = JsonPayloadClientConnected {
   jspCCmember :: Member,
   jspCCmembers :: [Member] 
-} deriving (Show, Generic, ToJSON, FromJSON)
+} deriving (Show, Generic, ToJSON, FromJSON, Eq)
 
 -- | JsonPayload when a client disconnected
 data JsonPayloadClientDisconnected = JsonPayloadClientDisconnected {
   jspCDmember :: Member,
   jspCDmembers :: [Member] 
-} deriving (Show, Generic, ToJSON, FromJSON)
+} deriving (Show, Generic, ToJSON, FromJSON, Eq)
 
 -- | JsonPayload when sending a message
 data JsonPayloadMessage = JsonPayloadMessage {
   jspMname :: String,
   jspMmsg :: String
-} deriving (Show, Generic, ToJSON, FromJSON)
+} deriving (Show, Generic, ToJSON, FromJSON, Eq)
 
 -- JSON consctruction helpers
 -- | Helper to Construct an empty Message

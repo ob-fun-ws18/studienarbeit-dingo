@@ -31,12 +31,10 @@ script:
 - stack --no-terminal test --haddock --no-haddock-deps --coverage
 - mv -v `stack path --local-doc-root` docs
 - mv -v `stack path --local-hpc-root` docs/hpc
-# - travis_retry curl -sSL https://raw.github.com/ndmitchell/hlint/master/misc/travis.sh \
-#     | sh -s .
 
 deploy:
-  provider: pages # speziell für GitHub Pages
-  skip_cleanup: true # der Branch soll **nicht ** vorher gelöscht werden
+  provider: pages # speziell für GitHub Pages
+  skip_cleanup: true # der Branch soll **nicht ** vorher gelöscht werden
   github_token: $GITHUB_TOKEN # das Token damit der Travis das darf,
                               # soll nicht in den Logs stehen, daher Variable
   on:

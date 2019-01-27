@@ -53,3 +53,5 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - p2pchat
+    - hspec
+    - QuickCheck
