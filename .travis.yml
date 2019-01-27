@@ -29,8 +29,8 @@ install:
 script:
 # Build the package, its tests and run the tests
 - stack --no-terminal test --haddock --no-haddock-deps --coverage
-- ln -s `stack path --local-doc-root` docs
-- mv `stack path --local-hpc-root` docs/hpc
+- mv -v `stack path --local-doc-root` docs
+- mv -v `stack path --local-hpc-root` docs/hpc
 # - travis_retry curl -sSL https://raw.github.com/ndmitchell/hlint/master/misc/travis.sh \
 #     | sh -s .
 
