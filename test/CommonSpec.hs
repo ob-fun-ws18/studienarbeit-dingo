@@ -33,3 +33,5 @@ spec = describe "Common" $ do
             jsonConnect "name" "uuid" 23 `shouldBe` (JsonMessage "connect" (Just (JsonPayloadConnect "name" "uuid" 23)) Nothing Nothing Nothing)
         it "jsonMessageSend" $
             jsonMessageSend "name" "uuid" `shouldBe` (JsonMessage "message" Nothing Nothing Nothing (Just $ JsonPayloadMessage "name" "uuid"))
+        it "isJsonOK" $
+            isJsonOK jsonOK `shouldBe` True
