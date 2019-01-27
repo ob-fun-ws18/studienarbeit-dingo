@@ -1,135 +1,48 @@
 module Main where
 
-import           System.IO
-import           Network.Socket
-import           Network.Socket.ByteString     as BS
-import qualified Data.ByteString.Char8         as B
-import qualified Control.Exception             as E
-import           Control.Monad                  ( unless
-                                                , forever
-                                                , void
-                                                )
-import           Control.Concurrent             ( forkFinally, killThread, forkIO )
+import P2PChat
+  
+import System.IO
+import Network.Socket
 
-import           Options.Applicative
-import           Data.Semigroup                 ( (<>) )
+import qualified Data.Text as T
 
-portInput :: Parser Int
-portInput = option
-  auto
-  (  long "port"
-  <> short 'p'
-  <> metavar "PORT"
-  <> help "Port to listen on"
-  <> showDefault
-  <> value 4242
-  <> metavar "INT"
-  )
+-- Option Parser
+import Options.Applicative
+import Data.Semigroup ( (<>) )
 
-ipInput :: Parser String
-ipInput = strOption
-  (  long "ipaddr"
-  <> short 'i'
-  <> metavar "IPADDR"
-  <> help "Ip to connect to"
-  <> showDefault
-  <> value "127.0.0.1"
-  <> metavar "STRING"
-  )
+-- | Custom Data Structure for the parsed Command-Line
+data Args = Args
+  { username :: String
+  , hostport :: Int
+  , connectTo :: Maybe String
+  } deriving (Show)
 
+-- | Command-Line Parser with Options.Applicative
+args :: Parser Args
+args = Args
+  <$> strOption (short 'u' <> long "username")
+  <*> option auto (short 'p' <> long "server-port" <> value 4242)
+  <*> optional (strOption $ short 'c' <> long "connect")
 
-
-data ServerOption = Client | Server
-
-data Input = Input ServerOption Int String
-
-input :: Parser Input
-input =
-  Input
-    <$> flag
-          Server
-          Client
-          (long "client" <> short 'c' <> help
-            "Start a client, otherwise a server"
-          )
-    <*> portInput
-    <*> ipInput
-
+-- | Entry Point: Parse CMD-Line Options and set handle buffering
 main :: IO ()
 main = withSocketsDo $ do
   hSetBuffering stdout NoBuffering
   main' =<< execParser opts
- where
+  where
   opts = info
-    (input <**> helper)
+    (args <**> helper)
     (fullDesc <> progDesc "P2P Chat Client" <> header
       "hello - a test for optparse-applicative"
     )
 
-
-main' :: Input -> IO ()
-main' (Input Client port ip) = doClient ip port
-main' (Input Server port _ ) = doServer port
-
-doClient :: String -> Int -> IO ()
-doClient ipAddr port = do
-  putStrLn "Started Client..."
-  E.bracket (open ipAddr port) close loop
-  return()
- where
-  resolve host port = do
-    let hints = defaultHints { addrSocketType = Stream }
-    addr : _ <- getAddrInfo (Just hints) (Just host) (Just (show port))
-    return addr
-  open host port = do 
-    addr <- resolve host port
-    sock <- socket (addrFamily addr) (addrSocketType addr) (addrProtocol addr)
-    connect sock $ addrAddress addr
-    return sock
-  loop sock = do
-    msg <- getLine
-    case msg of 
-      "/quit" -> do 
-        putStrLn "Quitting..."
-      [] -> loop sock
-      x -> do 
-        BS.send sock (B.pack msg)
-        loop sock
-      
-    
-
-
-doServer :: Int -> IO ()
-doServer port = do
-  putStrLn "Started Server..."
-  id <- forkIO (E.bracket (open port) shutdown loop)
-  waitForQuit
- where
-  waitForQuit = do
-    putStrLn "Type '/quit' to close the server"
-    msg <- getLine
-    case msg of 
-      "/quit" -> do 
-        putStrLn "Quitting..."
-      [] -> waitForQuit    
-  open port = do
-    sock <- socket AF_INET Stream 0
-    setSocketOption sock ReuseAddr 1
-    setSocketOption sock RecvTimeOut 10000
-    setSocketOption sock SendTimeOut 10000    
-    bind sock (SockAddrInet (toEnum port) iNADDR_ANY)
-    listen sock 2
-    return sock
-  loop sock = forever $ do
-    (conn, peer) <- accept sock
-    putStrLn $ "Connection from " ++ show peer
-    void $ forkFinally (talk conn) (\_ -> shutdown conn)
-  talk conn = do
-    -- fork here to have a send "thread"
-    msg <- BS.recv conn 256
-    unless (B.length msg == 0) $ do
-      putStrLn $ (show conn) ++ (B.unpack msg)
-      talk conn
-  shutdown conn = do
-    putStrLn "Shutting Down!"
-    close conn
+-- | Unpacks and Command-Args
+main' :: Args -> IO ()
+main' (Args username port (Just connect)) = do
+  -- change this to use with regex and assert format
+  let ipPort = T.splitOn (T.pack ":")  (T.pack connect)
+  let ip = T.unpack $ head ipPort
+  let port = read $ T.unpack (ipPort !! 1) :: Int
+  startP2PChat $ StartConfig username port (StartClient ip port)
+main' (Args username port Nothing) = startP2PChat $ StartConfig username port StartHost
