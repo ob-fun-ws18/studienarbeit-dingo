@@ -22,9 +22,12 @@ To connect to a Host running on "127.0.0.1:4242" ```stack exec p2pchat-exe -- -u
 - First Prototype (Sockets, Chat, Windows/Mac IO Madness, Heartbeat)
 - Documentation
 - Travis
+- Specs
 
 ### Wolfgang Gabler
+- Groupchat with fixed Host
 - Threading / Channels
 - Heartbeat
 - Host Chat Functionality
 - JSON
+- Specs

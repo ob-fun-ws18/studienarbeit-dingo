@@ -49,14 +49,12 @@ startP2PChat' (StartClient ip port) chans glob = startClient chans glob ip port
 startHost :: Channels -> Global -> IO ()
 startHost chans glob = do
   sockId <- startSocketHost glob chans
-  -- TODO: Error handling
   doHost glob chans sockId
 
 -- | Starts the client
 startClient :: Channels -> Global -> String -> Int -> IO ()  
 startClient chans glob host port = do
   sockId <- startSocketClient host port glob chans
-  -- TODO: needs error handling
   case sockId of
     Just id -> doClient glob chans id []
     Nothing -> return ()
