@@ -1,3 +1,10 @@
+{-|
+Module      : P2PChat.Socket.Host
+Description : Defines Host Implementation
+Copyright   : (c) Chris Brammer, 2019
+                  Wolfgang Gabler, 2019
+-}
+
 module P2PChat.Socket.Host (
   startSocketHost
 ) where
@@ -16,16 +23,19 @@ import System.Timeout
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as BL
 
+-- | Client Connection
 data SockCLientConnection = SockCLientConnection {
   member :: Member
 , clientHandle :: Handle
 } deriving (Show, Eq)
 
+-- | Socket Events
 data SockEvent = NewClient SockCLientConnection
                | SockInput SockCLientConnection String -- input from a sock
                | SockOutput String String -- msg to output to all clients
                | SockDisconnect SockCLientConnection -- Sock disconnected
 
+-- | Starts the Host Socket and a thread to manage it
 startSocketHost :: Global -> Channels -> IO ThreadId
 startSocketHost glob chan = do
   sock <- socket AF_INET Stream 0
@@ -34,6 +44,7 @@ startSocketHost glob chan = do
   listen sock 2
   forkIO $ runHostSock glob chan sock
 
+-- | Sets up threads for the host. Thread to accept clients, thread to handle events
 runHostSock :: Global -> Channels -> Socket -> IO ()
 runHostSock glob chans sock = do
   clientChan <- newChan :: IO (Chan SockEvent)
@@ -45,6 +56,7 @@ runHostSock glob chans sock = do
   killThread sockhandlerId
   killThread acceptId
 
+-- | Forwards events to the appropriate channels
 loopHostHandler :: Global -> Channels -> Chan JsonMessage -> IO ()
 loopHostHandler glob chans chanJson = do
   event <- readChan (csock chans)
@@ -56,6 +68,7 @@ loopHostHandler glob chans chanJson = do
     s@SockClientDisconnect -> writeChan (cmain chans) s
   loopHostHandler glob chans chanJson
 
+-- | Accepts new clients and handle the Handshake between Client/Host
 runAcceptLoop :: Socket -> Chan SockEvent -> Chan JsonMessage -> IO ()
 runAcceptLoop sock chan chanJson = do
   (con, peer) <- accept sock
@@ -78,7 +91,7 @@ runAcceptLoop sock chan chanJson = do
       _ -> putStrLn $ "DEBUG: Unknown connect msg: " ++ show input
   runAcceptLoop sock chan chanJson
 
--- Handles Input from ALL client sockets, has list of all Clients
+-- | Handles Input from ALL client sockets, has list of all Clients
 runSockEventHandler :: Chan SockEvent -> Chan Event -> Chan JsonMessage -> [SockCLientConnection] -> IO ()
 runSockEventHandler chanClient chanHost chanClients members = do
   sockEvent <- readChan chanClient
@@ -102,7 +115,7 @@ runSockEventHandler chanClient chanHost chanClients members = do
       writeChan chanHost $ SockHostDisconnect (member c) (map member newMembers)
       runSockEventHandler chanClient chanHost chanClients newMembers
 
-
+-- | Handles a single client connection, reading and writing
 runClientHandler :: SockCLientConnection -> Chan JsonMessage -> Chan SockEvent -> IO ()
 runClientHandler sock chanJson chanSockEvent = do
   outputId <- forkIO $ runSocketOutput (clientHandle sock) chanJson
@@ -111,6 +124,7 @@ runClientHandler sock chanJson chanSockEvent = do
   hClose (clientHandle sock)
   writeChan chanSockEvent (SockDisconnect sock)
 
+-- | Runs socket output, if we timeout we send a heartbeat
 runSocketOutput :: Handle -> Chan JsonMessage -> IO ()
 runSocketOutput hdl chan = do
   msg <- timeout 500000 $ readChan chan
@@ -119,6 +133,7 @@ runSocketOutput hdl chan = do
     Nothing -> B.hPutStrLn hdl $ BL.toStrict $ A.encode jsonHeartbeat
   runSocketOutput hdl chan
 
+-- | Runs socket input, on timeout (this includes not receiving a heartbeat) returns
 readClientConnection :: SockCLientConnection -> Chan SockEvent -> IO ()
 readClientConnection client chan = do
   input <- timeout 1000000 $ readHandle (clientHandle client)
@@ -133,6 +148,7 @@ readClientConnection client chan = do
         Nothing -> return ()
     Nothing -> return ()
 
+-- | Parses raw Input into JsonMessage and forwards to appropriate handler
 handleInput :: SockCLientConnection -> Chan SockEvent -> JsonMessage -> IO ()
 handleInput client chan msg = case msg of
   (JsonMessage "message" _ _ _ (Just (JsonPayloadMessage user m))) -> writeChan chan (SockInput client m)

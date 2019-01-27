@@ -1,3 +1,10 @@
+{-|
+Module      : P2PChat.Socket.Client
+Description : Defines Client Implementation
+Copyright   : (c) Chris Brammer, 2019
+                  Wolfgang Gabler, 2019
+-}
+
 module P2PChat.Socket.Client (
   startSocketClient
 ) where
@@ -16,7 +23,12 @@ import Control.Monad
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as BL
 
-startSocketClient :: String -> Int -> Global -> Channels -> IO (Maybe ThreadId)
+-- | Starts the client socket and tries to connect to the host
+startSocketClient :: String  -- ^ Host to connect to (e.g "127.0.0.1")
+                  -> Int  -- ^ Port to connect to
+                  -> Global  -- ^ Global State
+                  -> Channels  -- ^ Communication Channels
+                  -> IO (Maybe ThreadId)  -- ^ Main ThreadId of the client
 startSocketClient host port glob chans = do
   addrInfo <- getAddrInfo Nothing (Just host) (Just $ show port)
   let serverAddr = head addrInfo
@@ -31,7 +43,12 @@ startSocketClient host port glob chans = do
   else
     return Nothing
 
-handshake :: Handle -> String -> String -> Int -> IO Bool
+-- | Send the handshake to the server
+handshake :: Handle  -- ^ Handle to the server
+          -> String  -- ^ Username to register as
+          -> String  -- ^ UUID of this client
+          -> Int  -- ^ Port we are running on
+          -> IO Bool -- ^ True if successfull
 handshake hdl name uuid port = do
   B.hPutStrLn hdl (BL.toStrict (A.encode (jsonConnect name uuid port)))
   eof <- hIsEOF hdl -- TODO: timeout
@@ -44,6 +61,7 @@ handshake hdl name uuid port = do
       Just j -> return $ isJsonOK j
       Nothing -> return False
 
+-- | Main routine for the client
 runClientSock :: Global -> Channels -> Handle -> IO()
 runClientSock glob chans handle = do
   outputChan <- newChan :: IO (Chan JsonMessage)
@@ -54,6 +72,7 @@ runClientSock glob chans handle = do
   killThread readId
   killThread outputId
 
+-- | Client loop, forwards events appropriately to channels
 loopClientSock :: Global -> Channels -> Handle -> Chan JsonMessage -> IO()
 loopClientSock glob chans handle chan = do
   event <- readChan (csock chans)
@@ -65,6 +84,7 @@ loopClientSock glob chans handle chan = do
     s@SockClientDisconnect -> writeChan (cmain chans) s
   unless (isDisconnect event) $ loopClientSock glob chans handle chan
 
+-- | Read loop for the client with timeout
 readClientSock :: Handle -> Chan Event -> IO ()
 readClientSock hdl chan = do
   input <- timeout 1000000 $ readHandle hdl
@@ -79,6 +99,7 @@ readClientSock hdl chan = do
         Nothing -> writeChan chan SockClientDisconnect -- disconnect
     Nothing -> writeChan chan SockClientDisconnect -- timeout  
 
+-- | Routine to handle input of the client. Parsing of Json Messages
 handleInput :: Chan Event -> JsonMessage -> IO ()
 handleInput chan msg = case msg of
   (JsonMessage "message" _ _ _ (Just (JsonPayloadMessage user m))) -> writeChan chan (SockMsgIn user m)
@@ -86,6 +107,7 @@ handleInput chan msg = case msg of
   (JsonMessage "clientDisconnected" _ _ (Just (JsonPayloadClientDisconnected m ms)) _) -> writeChan chan (SockHostDisconnect m ms)
   _ -> return ()
 
+-- | Socket output for the client, also sends heartbeat automatically
 runSocketOutput :: Handle -> Chan JsonMessage -> IO ()
 runSocketOutput hdl chan = do
   msg <- timeout 500000 $ readChan chan

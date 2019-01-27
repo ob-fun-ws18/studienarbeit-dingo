@@ -10,19 +10,22 @@ import qualified Data.Text as T
 -- Option Parser
 import Options.Applicative
 import Data.Semigroup ( (<>) )
-  
+
+-- | Custom Data Structure for the parsed Command-Line
 data Args = Args
   { username :: String
   , hostport :: Int
   , connectTo :: Maybe String
   } deriving (Show)
 
+-- | Command-Line Parser with Options.Applicative
 args :: Parser Args
 args = Args
   <$> strOption (short 'u' <> long "username")
   <*> option auto (short 'p' <> long "server-port" <> value 4242)
   <*> optional (strOption $ short 'c' <> long "connect")
-  
+
+-- | Entry Point: Parse CMD-Line Options and set handle buffering
 main :: IO ()
 main = withSocketsDo $ do
   hSetBuffering stdout NoBuffering
@@ -33,7 +36,8 @@ main = withSocketsDo $ do
     (fullDesc <> progDesc "P2P Chat Client" <> header
       "hello - a test for optparse-applicative"
     )
-  
+
+-- | Unpacks and Command-Args
 main' :: Args -> IO ()
 main' (Args username port (Just connect)) = do
   -- change this to use with regex and assert format
